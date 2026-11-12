@@ -60,3 +60,12 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Still build output and local dependencies
+.DS_Store
+build/
+dependencies/
+*.app/
+*.dmg
+*.pkg
+*.zip
