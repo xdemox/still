@@ -1,34 +1,41 @@
 # Build and test Still
 
-## Build from source
+Use an Apple silicon Mac with Xcode and Swift 6.2 or later. The app requires macOS 26 or later.
 
-You need Xcode and CMake. You also need the following two files from the upstream project. This download is part of the build. The finished app runs offline.
+## Prepare the speech model
+
+Run these commands from the repository folder. This step uses the internet to fetch the pinned FluidAudio dependency and the Parakeet model. No meeting audio is sent.
 
 ```sh
 mkdir -p dependencies
-curl -fL https://codeload.github.com/ggml-org/whisper.cpp/tar.gz/refs/tags/v1.8.3 -o dependencies/whisper.tar.gz
-(cd dependencies && printf '%s  %s\n' 870ba21409cdf66697dc4db15ebdb13bc67037d76c7cc63756c81471d8f1731a whisper.tar.gz | shasum -a 256 -c)
-tar -xzf dependencies/whisper.tar.gz -C dependencies
-curl -fL https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin -o dependencies/ggml-base-q5_1.bin
-(cd dependencies && printf '%s  %s\n' 422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898 ggml-base-q5_1.bin | shasum -a 256 -c)
-cmake -S dependencies/whisper.cpp-1.8.3 -B dependencies/build \
-  -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=26.0 \
-  -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF \
-  -DWHISPER_CURL=OFF -DGGML_RPC=OFF -DGGML_METAL=ON -DGGML_METAL_EMBED_LIBRARY=ON -DGGML_BLAS=OFF
-cmake --build dependencies/build --target whisper-cli --parallel 6
+swift build --package-path SpeechHelper -c release --product prepare-parakeet
+SpeechHelper/.build/release/prepare-parakeet "$PWD/dependencies/parakeet-tdt-0.6b-v3"
+```
+
+The preparation tool downloads the current Core ML conversion of Parakeet TDT v3. Keep a copy of the prepared model folder for repeat builds. FluidAudio's source revision is pinned in SpeechHelper/Package.swift and Package.resolved.
+
+## Build
+
+```sh
 ./build.sh dependencies "$PWD/Still.app"
 ```
 
-The build signs the app for local use with an ad hoc signature. It uses [whisper.cpp](https://github.com/ggml-org/whisper.cpp/releases/tag/v1.8.3) and a [multilingual Whisper model](https://huggingface.co/ggerganov/whisper.cpp/blob/main/ggml-base-q5_1.bin).
+The script bundles the prepared model and signs the app for local use. The finished app has no network permission. Its speech helper loads the bundled models through FluidAudio's local-only loader. Missing files cause an error; the app cannot download replacements.
 
+Parakeet detects the language automatically. The globe menu provides a writing-script hint, such as Latin or Cyrillic, through the selected language. This hint does not force a language. See the [model card](https://huggingface.co/FluidInference/parakeet-tdt-0.6b-v3-coreml) for supported languages.
 
 ## Tests
 
-Build a separate test app. The test uses the bundled sample audio and a separate app identifier. It checks local transcription, playback starting, transcript review, and sandbox network restrictions.
+Fetch the public sample audio, then build a separate test app:
 
 ```sh
+curl -fL https://raw.githubusercontent.com/ggml-org/whisper.cpp/v1.8.3/samples/jfk.wav -o dependencies/jfk.wav
 STILL_TEST_BUILD=1 ./build.sh dependencies "$PWD/Still-test.app"
 "$PWD/Still-test.app/Contents/MacOS/Still" --smoke-test
 ```
 
-Check the app by hand as described in [RELEASE.md](RELEASE.md). The automated playback check does not confirm that audio is audible.
+Tests use a separate app identifier. They check local transcription, live preview, timestamps, microphone mute, playback starting, transcript review, and sandbox network restrictions. The playback check does not confirm that audio is audible.
+
+The helper loads models for each transcription job. This keeps model memory separate from the recording app, but adds loading time to each live preview update.
+
+Use [RELEASE.md](RELEASE.md) for the checks needed before public app distribution.

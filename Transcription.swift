@@ -1,13 +1,9 @@
 import AVFoundation
 import Foundation
 
-struct WhisperResult: Decodable {
-    struct Segment: Decodable {
-        struct Offset: Decodable { let from: Int }
-        let offsets: Offset
-        let text: String
-    }
-    let transcription: [Segment]
+private struct ParakeetPassage: Decodable {
+    let time: Double
+    let text: String
 }
 
 enum Transcription {
@@ -16,8 +12,8 @@ enum Transcription {
     }
 
     static func run(tracks: [Track], folder: URL, language: String, preview: Bool = false) throws -> [Line] {
-        guard let helper = Bundle.main.url(forAuxiliaryExecutable: "whisper-cli"),
-              let model = Bundle.main.url(forResource: "ggml-base-q5_1", withExtension: "bin") else {
+        guard let helper = Bundle.main.url(forAuxiliaryExecutable: "parakeet-helper"),
+              let model = Bundle.main.resourceURL?.appendingPathComponent("Parakeet", isDirectory: true) else {
             throw StillError("Still could not find its bundled speech model. Reinstall the app.")
         }
         let temporary = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -33,9 +29,7 @@ enum Transcription {
             let process = Process()
             process.executableURL = helper
             process.currentDirectoryURL = temporary
-            process.arguments = ["-m", model.path, "-f", wav.path, "-l", language,
-                "-t", String(min(6, ProcessInfo.processInfo.activeProcessorCount)),
-                "-oj", "-of", result.path, "-np"]
+            process.arguments = [model.path, wav.path, result.path, language]
             process.standardOutput = FileHandle.nullDevice
             process.standardError = FileHandle.nullDevice
             try process.run()
@@ -43,12 +37,12 @@ enum Transcription {
             guard process.terminationStatus == 0 else {
                 throw StillError("Transcription failed. The audio is still available in your library.")
             }
-            let json = try Data(contentsOf: result.appendingPathExtension("json"))
-            let segments = try JSONDecoder().decode(WhisperResult.self, from: json).transcription
+            let json = try Data(contentsOf: result)
+            let segments = try JSONDecoder().decode([ParakeetPassage].self, from: json)
             lines += segments.compactMap { segment in
                 let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else { return nil }
-                return Line(time: track.offset + Double(segment.offsets.from) / 1000, source: track.name, text: text)
+                guard !text.isEmpty, segment.time.isFinite, segment.time >= 0 else { return nil }
+                return Line(time: track.offset + segment.time, source: track.name, text: text)
             }
         }
         return lines.sorted { $0.time < $1.time }

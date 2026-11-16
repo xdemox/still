@@ -255,8 +255,8 @@ struct StillView: View {
                         .accessibilityAddTraits(.isHeader)
                     Spacer()
                     Menu {
-                        Picker("Transcript language", selection: $model.language) {
-                            Text("Auto-detect").tag("auto")
+                        Picker("Script hint", selection: $model.language) {
+                            Text("Automatic").tag("auto")
                             Text("English").tag("en")
                             Text("French").tag("fr")
                             Text("German").tag("de")
@@ -267,8 +267,8 @@ struct StillView: View {
                     } label: { Image(systemName: "globe").foregroundStyle(muted) }
                     .menuStyle(.borderlessButton)
                     .fixedSize()
-                    .help("Transcript language")
-                    .accessibilityLabel("Transcript language")
+                    .help("Parakeet detects language automatically. A hint can help it choose the writing script.")
+                    .accessibilityLabel("Transcription script hint")
                     .disabled(model.state != .idle)
                 }
                 TimelineView(.periodic(from: .now, by: model.state == .recording ? 0.12 : 10)) { _ in

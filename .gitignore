@@ -69,3 +69,6 @@ dependencies/
 *.dmg
 *.pkg
 *.zip
+
+# Swift package build products
+**/.build/

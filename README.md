@@ -5,7 +5,7 @@ A local meeting recorder for Apple silicon Macs running macOS 26 or later.
 ## Features
 
 - Record your microphone, Mac audio, or both. Mute and unmute your microphone during recording while Mac audio continues.
-- Transcribe recordings on your Mac with Whisper.
+- Transcribe recordings on your Mac with Parakeet TDT v3.
 - Search meetings and jump to timestamped passages.
 - Add notes, review actions, and mark important moments.
 - Filter meetings by date, topic, or speaker label.
@@ -18,7 +18,7 @@ Audio and transcripts stay on your Mac. The app runs in the macOS sandbox withou
 
 ## Build
 
-You need Xcode and CMake. Follow the [build and test instructions](BUILD.md).
+You need Xcode with Swift 6.2 or later. Follow the [build and test instructions](BUILD.md).
 
 This is an early version. Search uses keyword matching, highlights select transcript passages, and speaker labels use audio sources or names you assign. Scheduled recording requires Still to stay open and your Mac to stay awake.
 
