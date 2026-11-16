@@ -16,6 +16,7 @@ final class Library: ObservableObject {
     @Published var page: Page = .record
     @Published private(set) var state: State = .idle
     @Published var mic = true
+    @Published private(set) var micMuted = false
     @Published var mac = true
     @Published var language = "auto"
     @Published var liveEnabled = true
@@ -98,6 +99,7 @@ final class Library: ObservableObject {
     func start(title: String) async {
         guard state == .idle, mic || mac else { return }
         state = .starting
+        micMuted = false
         notice = nil
         liveLines = []
         liveIssue = false
@@ -139,6 +141,13 @@ final class Library: ObservableObject {
         }
     }
 
+    func toggleMicrophoneMute() {
+        guard state == .recording, mic else { return }
+        let muted = !micMuted
+        recorder.setMicrophoneMuted(muted)
+        micMuted = muted
+    }
+
     func mark() {
         guard var meeting = active else { return }
         meeting.marks.append(elapsed)
@@ -150,6 +159,7 @@ final class Library: ObservableObject {
         guard state == .recording, var meeting = active else { return }
         state = .stopping
         let (tracks, error) = await recorder.stop()
+        micMuted = false
         preview?.stop()
         preview = nil
         active = nil
@@ -380,6 +390,7 @@ final class Library: ObservableObject {
             guard connected == -1, errno == EPERM || errno == EACCES else {
                 throw StillError("Network connection was not blocked by the sandbox (errno \(errno)).")
             }
+            try Self.testMicrophoneMute()
             let meeting = try addAudio(sample)
             let dir = folder(meeting.id)
             defer { delete(meeting) }
@@ -439,12 +450,52 @@ final class Library: ObservableObject {
                   !FileManager.default.fileExists(atPath: dir.appendingPathComponent(meeting.tracks[0].file).path) else {
                 throw StillError("Deleting audio did not preserve the meeting or remove the file.")
             }
-            print("PASS: network blocked; import, transcription, preview, review, correction and audio removal verified.")
+            print("PASS: network blocked; microphone mute/unmute, Mac audio isolation, import, transcription, preview, review, correction and audio removal verified.")
         } catch {
             fputs("FAIL: \(error.localizedDescription)\n", stderr)
             exit(1)
         }
         exit(0)
+    }
+
+    private static func testMicrophoneMute() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let format = AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1)!
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 160)!
+        buffer.frameLength = 160
+        for i in 0..<160 { buffer.floatChannelData![0][i] = 0.25 }
+        var failure: Error?
+        let mic = TrackWriter(name: "Microphone", url: dir.appendingPathComponent("mic.caf"),
+                              started: ProcessInfo.processInfo.systemUptime, preview: nil) { failure = $0 }
+        let mac = TrackWriter(name: "Mac audio", url: dir.appendingPathComponent("mac.caf"),
+                              started: ProcessInfo.processInfo.systemUptime, preview: nil) { failure = $0 }
+        mic.append(buffer, timestamp: .nan)
+        mic.setMuted(true)
+        mic.append(buffer, timestamp: .nan)
+        mac.append(buffer, timestamp: .nan)
+        mic.setMuted(false)
+        mic.append(buffer, timestamp: .nan)
+        let (track, error) = mic.finish()
+        _ = mac.finish()
+        if let error = failure ?? error { throw error }
+        let file = try AVAudioFile(forReading: dir.appendingPathComponent("mic.caf"))
+        let audio = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: 480)!
+        try file.read(into: audio)
+        guard track != nil, file.length == 480, let samples = audio.floatChannelData?[0] else {
+            throw StillError("Microphone mute changed the recording duration.")
+        }
+        for i in 0..<480 {
+            let expected: Float = (160..<320).contains(i) ? 0 : 0.25
+            guard abs(samples[i] - expected) < 0.0001 else { throw StillError("Muted audio was saved or unmute failed.") }
+        }
+        let other = try AVAudioFile(forReading: dir.appendingPathComponent("mac.caf"))
+        let otherAudio = AVAudioPCMBuffer(pcmFormat: other.processingFormat, frameCapacity: 160)!
+        try other.read(into: otherAudio)
+        guard other.length == 160, otherAudio.floatChannelData?[0][0] == 0.25 else {
+            throw StillError("Microphone mute affected Mac audio.")
+        }
     }
 
     private static func testPreview(_ sample: URL, in folder: URL) async throws -> [Line] {

@@ -4,7 +4,7 @@ A local meeting recorder for Apple silicon Macs running macOS 26 or later.
 
 ## Features
 
-- Record your microphone, Mac audio, or both.
+- Record your microphone, Mac audio, or both. Mute and unmute your microphone during recording while Mac audio continues.
 - Transcribe recordings on your Mac with Whisper.
 - Search meetings and jump to timestamped passages.
 - Add notes, review actions, and mark important moments.

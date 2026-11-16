@@ -315,6 +315,17 @@ struct StillView: View {
                             .frame(width: 42, alignment: .trailing)
                     }
                 }
+                if model.state == .recording, model.mic {
+                    HStack {
+                        Label(model.micMuted ? "Microphone muted" : "Microphone recording",
+                              systemImage: model.micMuted ? "mic.slash.fill" : "mic.fill")
+                            .foregroundStyle(model.micMuted ? coral : muted)
+                        Spacer()
+                        Button(model.micMuted ? "Unmute mic" : "Mute mic") { model.toggleMicrophoneMute() }
+                            .buttonStyle(.plain).foregroundStyle(mint)
+                    }.font(.system(size: 12, weight: .medium)).padding(12)
+                        .background(surface, in: RoundedRectangle(cornerRadius: 10))
+                }
                 HStack(spacing: 8) {
                     primary(
                         model.state == .recording ? "Stop & save" : model.state == .starting ? "Starting…" : model.state == .stopping ? "Saving…" : "Start recording",

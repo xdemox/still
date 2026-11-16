@@ -58,6 +58,7 @@ final class TrackWriter {
     private var previewStart: AVAudioFramePosition = 0
     private var previewFrames: AVAudioFramePosition = 0
     private var finished = false
+    private var muted = false
 
     init(name: String, url: URL, started: Double, preview: LiveTranscription?, onFailure: @escaping (Error) -> Void) {
         self.name = name
@@ -88,6 +89,11 @@ final class TrackWriter {
                         try writeSilence(gap, format: buffer.format)
                     }
                 }
+                if muted {
+                    try writeSilence(AVAudioFramePosition(buffer.frameLength), format: buffer.format)
+                    level = 0
+                    return
+                }
                 try write(buffer)
                 if let channel = buffer.floatChannelData?.pointee {
                     let stride = buffer.stride
@@ -116,6 +122,10 @@ final class TrackWriter {
             let track = frames > 0 ? Track(name: name, file: url.lastPathComponent, offset: offset, duration: Double(frames) / rate) : nil
             return (track, failure)
         }
+    }
+
+    func setMuted(_ value: Bool) {
+        queue.sync { muted = value; if value { level = 0 } }
     }
 
     var meter: Double { queue.sync { level } }
@@ -271,6 +281,8 @@ final class Recorder {
             throw error
         }
     }
+
+    func setMicrophoneMuted(_ value: Bool) { micWriter?.setMuted(value) }
 
     var elapsed: Double { max(0, ProcessInfo.processInfo.systemUptime - started) }
     var level: Double { max(micWriter?.meter ?? 0, system?.meter ?? 0) }
