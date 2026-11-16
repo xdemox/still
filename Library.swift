@@ -433,6 +433,14 @@ final class Library: ObservableObject {
                 stopPlayback()
             }
 
+            let plain = Self.exportText(reviewed)
+            let markdown = Self.exportText(reviewed, markdown: true)
+            guard plain.contains("Test note"), plain.contains("Sam"), plain.contains("[00:04]"),
+                  plain.contains("DECISIONS AND ACTIONS"), !plain.hasPrefix("# "),
+                  markdown.hasPrefix("# "), markdown.contains("## Transcript"), markdown.contains("Test note") else {
+                throw StillError("Copied and exported text lost meeting content or formatting.")
+            }
+
             let previewLines = try await Self.testPreview(sample, in: dir)
             guard previewLines.map(\.text).joined(separator: " ").localizedCaseInsensitiveContains("ask not") else {
                 throw StillError("The live preview missed the expected phrase.")
@@ -554,26 +562,40 @@ final class Library: ObservableObject {
         }
     }
 
+    static func exportText(_ meeting: Meeting, markdown: Bool = false) -> String {
+        var text = "\(markdown ? "# " : "")\(meeting.title)\n\(meeting.date.formatted(date: .long, time: .shortened))\n"
+        if !meeting.notes.isEmpty { text += "\n\(markdown ? "## Notes" : "NOTES")\n\(meeting.notes)\n" }
+        if !meeting.marks.isEmpty { text += "\n\(markdown ? "## Marks" : "MARKS")\n" + meeting.marks.map(clockText).joined(separator: " · ") + "\n" }
+        let kept = (meeting.review ?? []).filter { $0.status == .kept || $0.status == .done }
+        if !kept.isEmpty {
+            text += "\n\(markdown ? "## Decisions and actions" : "DECISIONS AND ACTIONS")\n" + kept.map { item in
+                let due = item.due.map { " · Due " + $0.formatted(date: .abbreviated, time: .omitted) } ?? ""
+                let done = item.status == .done ? " · Done" : ""
+                return "\(markdown ? "- " : "")[\(clockText(item.line.time))] \(item.kind.label)\(due)\(done)  \(item.line.text)"
+            }.joined(separator: "\n") + "\n"
+        }
+        if let lines = meeting.transcript, !lines.isEmpty {
+            text += "\n\(markdown ? "## Transcript" : "TRANSCRIPT")\n" + lines.map { "\(markdown ? "- " : "")[\(clockText($0.time))] \(meeting.speaker(for: $0))  \($0.text)" }.joined(separator: "\n") + "\n"
+        }
+        return text
+    }
+
+    func copy(_ meeting: Meeting, markdown: Bool = false) {
+        let text = Self.exportText(meeting, markdown: markdown)
+        let clipboard = NSPasteboard.general
+        clipboard.clearContents()
+        if !clipboard.setString(text, forType: .string) {
+            notice = "Still could not copy this meeting. Try again."
+        }
+    }
+
     func export(_ meeting: Meeting, markdown: Bool = false) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = markdown ? [UTType(filenameExtension: "md") ?? .plainText] : [.plainText]
         panel.nameFieldStringValue = meeting.title.replacingOccurrences(of: "/", with: "-") + (markdown ? ".md" : ".txt")
         panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
-            var text = "\(markdown ? "# " : "")\(meeting.title)\n\(meeting.date.formatted(date: .long, time: .shortened))\n"
-            if !meeting.notes.isEmpty { text += "\n\(markdown ? "## Notes" : "NOTES")\n\(meeting.notes)\n" }
-            if !meeting.marks.isEmpty { text += "\n\(markdown ? "## Marks" : "MARKS")\n" + meeting.marks.map(clockText).joined(separator: " · ") + "\n" }
-            let kept = (meeting.review ?? []).filter { $0.status == .kept || $0.status == .done }
-            if !kept.isEmpty {
-                text += "\n\(markdown ? "## Decisions and actions" : "DECISIONS AND ACTIONS")\n" + kept.map { item in
-                    let due = item.due.map { " · Due " + $0.formatted(date: .abbreviated, time: .omitted) } ?? ""
-                    let done = item.status == .done ? " · Done" : ""
-                    return "\(markdown ? "- " : "")[\(clockText(item.line.time))] \(item.kind.label)\(due)\(done)  \(item.line.text)"
-                }.joined(separator: "\n") + "\n"
-            }
-            if let lines = meeting.transcript, !lines.isEmpty {
-                text += "\n\(markdown ? "## Transcript" : "TRANSCRIPT")\n" + lines.map { "\(markdown ? "- " : "")[\(clockText($0.time))] \(meeting.speaker(for: $0))  \($0.text)" }.joined(separator: "\n") + "\n"
-            }
+            let text = Self.exportText(meeting, markdown: markdown)
             do { try text.write(to: url, atomically: true, encoding: .utf8) }
             catch { self?.notice = error.localizedDescription }
         }

@@ -8,6 +8,7 @@ A local meeting recorder for Apple silicon Macs running macOS 26 or later.
 - Transcribe recordings on your Mac with Parakeet TDT v3.
 - Search meetings and jump to timestamped passages.
 - Add notes, review actions, and mark important moments.
+- Copy meeting notes and transcripts as text or Markdown, or export them to files.
 - Filter meetings by date, topic, or speaker label.
 - Use a compact side panel or expand it into the Meetings view.
 - Choose a day or night theme, or follow your Mac’s appearance.

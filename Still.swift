@@ -783,6 +783,9 @@ struct StillView: View {
                     .buttonStyle(.plain).foregroundStyle(mint)
                 Spacer()
                 Menu {
+                    Button("Copy as text") { model.copy(meeting) }
+                    Button("Copy as Markdown") { model.copy(meeting, markdown: true) }
+                    Divider()
                     Button("Export as Markdown…") { model.export(meeting, markdown: true) }
                     Button("Export as text…") { model.export(meeting) }
                     if meeting.audioRemoved != true {
