@@ -70,6 +70,7 @@ struct StillView: View {
     @State private var title = ""
     @State private var query = ""
     @State private var deleting: Meeting?
+    @State private var regenerating: Meeting?
     @State private var removingAudio: Meeting?
     @State private var naming: Line?
     @State private var speakerName = ""
@@ -87,6 +88,10 @@ struct StillView: View {
         }
         .preferredColorScheme(appearance == "day" ? .light : appearance == "night" ? .dark : nil)
         .foregroundStyle(paper)
+        .confirmationDialog("Regenerate this transcript?", isPresented: Binding(get: { regenerating != nil }, set: { if !$0 { regenerating = nil } }), titleVisibility: .visible) {
+            Button("Regenerate transcript") { if let regenerating { model.transcribe(regenerating) }; regenerating = nil }
+            Button("Cancel", role: .cancel) { regenerating = nil }
+        } message: { Text("Still will use the saved audio and current speech model. It will back up the current transcript. Notes, audio, and kept actions will stay.") }
         .confirmationDialog("Delete this meeting?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
             Button("Delete meeting", role: .destructive) { if let deleting { model.delete(deleting) }; deleting = nil }
             Button("Cancel", role: .cancel) { deleting = nil }
@@ -794,7 +799,10 @@ struct StillView: View {
                                 Button(track.name) { model.exportAudio(track, from: meeting) }
                             }
                         }
-                        if meeting.transcript == nil { Button("Transcribe audio") { model.transcribe(meeting) }.disabled(model.transcribing.contains(meeting.id)) }
+                        Button(meeting.transcript == nil ? "Transcribe audio" : "Regenerate transcript…") {
+                            if meeting.transcript == nil { model.transcribe(meeting) }
+                            else { regenerating = meeting }
+                        }.disabled(model.transcribing.contains(meeting.id))
                         Button("Delete audio, keep notes…", role: .destructive) { removingAudio = meeting }.disabled(model.transcribing.contains(meeting.id))
                     }
                     Button("Delete meeting…", role: .destructive) { deleting = meeting }.disabled(model.transcribing.contains(meeting.id))
@@ -805,6 +813,12 @@ struct StillView: View {
                 .font(.system(size: 22, design: .serif)).textFieldStyle(.plain)
             Text(meeting.date.formatted(date: .abbreviated, time: .shortened))
                 .font(.system(size: 11)).foregroundStyle(muted)
+            if model.transcribing.contains(meeting.id) {
+                HStack(spacing: 7) {
+                    ProgressView().controlSize(.small)
+                    Text(meeting.transcript == nil ? "Transcribing on this Mac…" : "Regenerating transcript on this Mac…")
+                }.font(.system(size: 11)).foregroundStyle(muted)
+            }
             if meeting.audioRemoved == true {
                 Label("Audio deleted · Notes and transcript kept", systemImage: "doc.text")
                     .font(.system(size: 11)).foregroundStyle(muted)

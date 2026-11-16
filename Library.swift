@@ -190,9 +190,26 @@ final class Library: ObservableObject {
                 let lines = try await Task.detached(priority: .utility) {
                     try Transcription.run(meeting: meeting, folder: dir, language: spokenLanguage)
                 }.value
-                edit(meeting.id, flush: true) { $0.transcript = lines }
+                try replaceTranscript(meeting.id, with: lines)
+                if meeting.transcript != nil { notice = "Transcript regenerated. The previous version was backed up. Notes and kept actions are unchanged." }
             } catch { notice = error.localizedDescription }
         }
+    }
+
+    func replaceTranscript(_ id: UUID, with lines: [Line]) throws {
+        guard let index = meetings.firstIndex(where: { $0.id == id }) else { throw StillError("This meeting is no longer in the library.") }
+        var updated = meetings[index]
+        if updated.transcript != nil {
+            guard !lines.isEmpty else { throw StillError("No speech was found. Still kept the previous transcript and audio.") }
+            let backups = folder(id).appendingPathComponent("Transcript Backups", isDirectory: true)
+            try FileManager.default.createDirectory(at: backups, withIntermediateDirectories: true)
+            let backup = backups.appendingPathComponent("\(UUID().uuidString).json")
+            try JSONEncoder().encode(updated).write(to: backup, options: .atomic)
+        }
+        updated.transcript = lines
+        try save(updated)
+        pendingEdits.removeValue(forKey: id)?.cancel()
+        meetings[index] = updated
     }
 
     func edit(_ id: UUID, flush: Bool = false, _ update: (inout Meeting) -> Void) {
@@ -441,6 +458,21 @@ final class Library: ObservableObject {
                 throw StillError("Copied and exported text lost meeting content or formatting.")
             }
 
+            let regenerated = (reviewed.transcript ?? []) + [Line(time: 6, source: "Mac audio", text: "A new passage.")]
+            try replaceTranscript(meeting.id, with: regenerated)
+            let backups = try FileManager.default.contentsOfDirectory(at: dir.appendingPathComponent("Transcript Backups"), includingPropertiesForKeys: nil)
+            let backup = try JSONDecoder().decode(Meeting.self, from: Data(contentsOf: backups[0]))
+            guard backups.count == 1, backup.transcript?.count == 2, current?.transcript?.count == 3,
+                  current?.notes == "Test note", current?.speaker(for: action) == "Sam", current?.review?.first?.due == due else {
+                throw StillError("Regeneration lost the previous transcript, notes, speaker name, or action.")
+            }
+            do {
+                try replaceTranscript(meeting.id, with: [])
+                throw StillError("An empty regenerated transcript replaced the original.")
+            } catch {
+                guard current?.transcript?.count == 3 else { throw error }
+            }
+
             let previewLines = try await Self.testPreview(sample, in: dir)
             guard previewLines.map(\.text).joined(separator: " ").localizedCaseInsensitiveContains("ask not") else {
                 throw StillError("The live preview missed the expected phrase.")
@@ -458,7 +490,7 @@ final class Library: ObservableObject {
                   !FileManager.default.fileExists(atPath: dir.appendingPathComponent(meeting.tracks[0].file).path) else {
                 throw StillError("Deleting audio did not preserve the meeting or remove the file.")
             }
-            print("PASS: network blocked; microphone mute/unmute, Mac audio isolation, import, transcription, preview, review, correction and audio removal verified.")
+            print("PASS: network blocked; transcript regeneration and backup, microphone mute/unmute, Mac audio isolation, import, transcription, preview, review, correction and audio removal verified.")
         } catch {
             fputs("FAIL: \(error.localizedDescription)\n", stderr)
             exit(1)
