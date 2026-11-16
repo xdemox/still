@@ -8,6 +8,7 @@ if [[ $# != 2 ]]; then
 fi
 deps=$(cd "$1" && pwd)
 app=$2
+signing_identity=${STILL_SIGNING_IDENTITY:--}
 model="$deps/parakeet-tdt-0.6b-v3"
 if [[ ! -d "$model" || ! -f "$model/parakeet_vocab.json" ]]; then
     echo 'Parakeet models are missing. Follow BUILD.md.' >&2
@@ -54,8 +55,8 @@ ditto "$model" "$resources/Parakeet"
 cp "$source_dir/ThirdParty/"*-LICENSE.txt "$resources/"
 cp "$source_dir/ThirdParty/README.md" "$resources/ThirdParty-NOTICES.txt"
 
-codesign --force --sign - --entitlements "$source_dir/Helper.entitlements" "$contents/MacOS/parakeet-helper"
-codesign --force --sign - --entitlements "$source_dir/Still.entitlements" "$bundle"
+codesign --force --sign "$signing_identity" --entitlements "$source_dir/Helper.entitlements" "$contents/MacOS/parakeet-helper"
+codesign --force --sign "$signing_identity" --entitlements "$source_dir/Still.entitlements" "$bundle"
 codesign --verify --deep --strict "$bundle"
 if [[ -e "$app" ]]; then
     echo "Move the previous build first: $app" >&2

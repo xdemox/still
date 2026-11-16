@@ -39,3 +39,15 @@ Tests use a separate app identifier. They check local transcription, live previe
 The helper loads models for each transcription job. This keeps model memory separate from the recording app, but adds loading time to each live preview update.
 
 Use [RELEASE.md](RELEASE.md) for the checks needed before public app distribution.
+
+## Keep permission grants across updates
+
+Local builds use an ad hoc signature by default. That signature changes when the code changes. macOS can then ask for capture permission again, even if Still is already listed in Settings.
+
+If you have an Apple Development or Developer ID Application certificate, use the same identity for each build:
+
+```sh
+STILL_SIGNING_IDENTITY="Apple Development: YOUR NAME (TEAM ID)" ./build.sh dependencies "$PWD/Still.app"
+```
+
+Use `security find-identity -v -p codesigning` to list available identities. Keep the bundle identifier and install location stable. macOS controls permission grants. Still starts the capture API directly and does not call the legacy screen-permission request as a separate preflight step.

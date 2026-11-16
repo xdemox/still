@@ -245,9 +245,6 @@ final class Recorder {
         if mic, !(await AVCaptureDevice.requestAccess(for: .audio)) {
             throw StillError("Allow Microphone access for Still in System Settings → Privacy & Security.")
         }
-        if mac, !CGPreflightScreenCaptureAccess(), !CGRequestScreenCaptureAccess() {
-            throw StillError("Allow Still in System Settings → Privacy & Security → Screen & System Audio Recording. Reopen Still if macOS asks.")
-        }
         started = ProcessInfo.processInfo.systemUptime
         if mac {
             let writer = TrackWriter(name: "Mac audio", url: folder.appendingPathComponent("mac.caf"),
