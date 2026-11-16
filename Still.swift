@@ -894,7 +894,11 @@ struct StillView: View {
                 .foregroundStyle(muted).accessibilityAddTraits(.isHeader)
             TextEditor(text: Binding(get: { meeting.notes }, set: { value in model.edit(meeting.id) { $0.notes = value } }))
                 .font(.system(size: 12)).scrollContentBackground(.hidden)
-                .frame(minHeight: 73).accessibilityLabel("Meeting notes")
+                .frame(minHeight: 73)
+                .padding(8)
+                .background(paper.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+                .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(muted.opacity(0.45)).allowsHitTesting(false) }
+                .accessibilityLabel("Meeting notes")
             let decisions = meeting.reviewItems.filter { $0.status != .dismissed && $0.kind == .decision }
             let actions = meeting.reviewItems.filter { $0.status != .dismissed && $0.kind == .action }
             if model.transcribing.contains(meeting.id) {
